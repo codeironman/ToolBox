@@ -1,0 +1,28 @@
+[application]
+name = "Toolbox"
+default_platform = "desktop"
+out_dir = "dist"
+asset_dir = "assets"
+
+[desktop]
+width = 600
+height = 400
+
+[web.app]
+title = "Toolbox"
+
+[web.watcher]
+watch_path = ["src", "assets"]
+
+[web.resource]
+style = []
+script = []
+
+[web.resource.dev]
+script = []
+
+[web.proxy]
+backend = "http://localhost:8000/api"
+
+[web.server]
+port = 8080
