@@ -3,15 +3,29 @@ name = "toolbox"
 version = "0.1.0"
 edition = "2021"
 
-[dependencies]
-dioxus = { version = "0.5", features = ["desktop", "web"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-base64 = "0.21"
-chrono = { version = "0.4", features = ["serde"] }
-web-sys = { version = "0.3", optional = true }
+#[dependencies]
+#dioxus = { version = "0.5", features = ["desktop", "web"] }
+#serde = { version = "1.0", features = ["derive"] }
+#serde_json = "1.0"
+#base64 = "0.21"
+#chrono = { version = "0.4", features = ["serde"] }
+#web-sys = { version = "0.3", optional = true }
 
 [features]
 default = ["desktop"]
 desktop = ["dioxus/desktop"]
-web = ["dioxus/web", "web-sys"]
+web = ["dioxus/web"]
+
+[dependencies]
+dioxus = { version = "0.6", features = ["desktop"] } # 或 web
+serde_json = "1"
+base64 = "0.22"
+chrono = { version = "0.4", features = ["clock"] }
+
+[workspace]
+members = [
+    "src/core",
+    "src/tools",
+    "src/ui",
+]
+resolver = "2"
