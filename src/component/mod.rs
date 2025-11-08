@@ -1,18 +1,15 @@
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
-// 1) 引入三个子模块
 mod base64;
-mod common;
 mod json;
 mod timestamp;
-// 2) 把组件 re-export 出来（在本模块内/外都能直接用 ui::json 等）
+mod util;
 
 use crate::component::base64::Base64Tool;
 use crate::component::json::JsonFormatterTool;
 pub use timestamp::TimestampTool;
 
-// 3) 状态与工具枚举
 #[derive(Clone, PartialEq, Copy, Serialize, Deserialize)]
 enum Tool {
     JsonFormatter,
@@ -49,7 +46,7 @@ impl Default for AppState {
     }
 }
 
-// 4) App（保持和你原来一致）
+// 4) App
 #[component]
 pub fn App() -> Element {
     let app_state = use_context_provider(|| Signal::new(AppState::default()));
@@ -57,19 +54,66 @@ pub fn App() -> Element {
     rsx! {
         div {
             class: "app-container",
-            style: "display: flex; height: 100vh; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #1e1e1e; color: #cccccc;",
+            style: "display:flex; height:100vh; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color:#1e1e1e; color:#cccccc;",
             Sidebar { app_state }
+
             div {
                 class: "main-content",
-                style: "flex: 1; display: flex; flex-direction: column;",
+                style: "flex:1; display:flex; flex-direction:column;",
+
+                // ===== 顶部 Toolbar：标题绝对居中 =====
                 div {
                     class: "toolbar",
-                    style: "height: 40px; background: #252526; border-bottom: 1px solid #3c3c3c; display: flex; align-items: center; padding: 0 10px;",
-                    h2 { style: "color: #cccccc; font-size: 14px; font-weight: 400; margin: 0;", "{app_state().current_tool.name()}" }
+                    style: "
+                        height:40px;
+                        background:#252526;
+                        border-bottom:1px solid #3c3c3c;
+                        display:flex;
+                        align-items:center;
+                        padding:0 10px;
+                        position:relative;    
+                        user-select:none; -webkit-user-select:none; -moz-user-select:none; -ms-user-select:none;
+                    ",
+
+                    // 左侧：图标组占位（可放返回、刷新等）
+                    div {
+                        style: "display:flex; align-items:center; gap:8px;",
+                        // 示例图标占位（可按需替换/删除）
+                        // span { "⬅︎" }
+                        // span { "↻" }
+                    }
+
+                    // 中间：始终绝对居中的标题（不受左右影响）
+                    h1 {
+                        style: "
+                            position:absolute;
+                            left:50%;
+                            transform:translateX(-50%);
+                            margin:0;
+                            color:#cccccc;
+                            font-size:14px;
+                            font-weight:500;
+                            line-height:40px;
+                            pointer-events:none;   /* 不遮挡左右按钮点击 */
+                        ",
+                        "{app_state().current_tool.name()}"
+                    }
+
+                    // 右侧：设置按钮占位
+                    div {
+                        style: "margin-left:auto; display:flex; align-items:center; gap:8px;",
+                        // 示例按钮占位：
+                        // button {
+                        //     style: "background:#3a3a3a; color:#ddd; border:1px solid #4a4a4a; border-radius:6px; padding:4px 8px; cursor:pointer; font-size:12px;",
+                        //     "设置"
+                        // }
+                    }
                 }
+
+                // ===== 工具内容区 =====
                 div {
                     class: "tool-content",
-                    style: "flex: 1; overflow: hidden;",
+                    style: "flex:1; overflow:hidden;",
                     match app_state().current_tool {
                         Tool::JsonFormatter => rsx! { JsonFormatterTool {} },
                         Tool::Base64Encoder => rsx! { Base64Tool {} },
@@ -80,6 +124,8 @@ pub fn App() -> Element {
         }
     }
 }
+
+// ================= Sidebar =================
 #[component]
 fn Sidebar(app_state: Signal<AppState>) -> Element {
     // --- 状态：宽度、是否收起、是否拖拽中、上一次鼠标x、收起前宽度 ---
@@ -178,7 +224,7 @@ fn Sidebar(app_state: Signal<AppState>) -> Element {
     rsx! {
         // 外层：包含侧栏与把手，侧栏上监听 move/up 便于拖拽
         div {
-            style: "display:flex; height:100%;",
+            style: "display:flex; height:100%; user-select:none; -webkit-user-select:none; -moz-user-select:none; -ms-user-select:none;",
 
             // 侧栏容器
             div {
@@ -187,8 +233,7 @@ fn Sidebar(app_state: Signal<AppState>) -> Element {
                 onmousemove: on_mouse_move,
                 onmouseup: on_mouse_up,
 
-                // 顶部标题（收起时缩略）
-         // 顶部标题（展开显示：图标+文字；收起显示：只有图标）
+                // 顶部标题（展开显示：图标+文字；收起显示：只有图标）
                 div {
                     style: "
                         color:#eee;
@@ -205,17 +250,11 @@ fn Sidebar(app_state: Signal<AppState>) -> Element {
                     ",
 
                     // 图标：展开 + 收起都显示
-                    span {
-                        style: "font-size:20px;",
-                        "🔧"
-                    }
+                    span { style: "font-size:20px;", "🔧" }
 
                     // 文本：只有展开时显示
                     if !*collapsed.read() {
-                        span {
-                            style: "font-size:14px; color:#ddd;",
-                            "ToolBox"
-                        }
+                        span { style: "font-size:14px; color:#ddd;", "ToolBox" }
                     }
                 }
 

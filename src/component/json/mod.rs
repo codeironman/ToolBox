@@ -1,3 +1,4 @@
+use crate::component::util::{hignlight::highlight_json_with_search, search::SearchBar};
 use dioxus::prelude::*;
 
 #[component]
@@ -13,7 +14,7 @@ pub fn JsonFormatterTool() -> Element {
     let mut input_show_find = use_signal(|| false);
     let mut input_show_replace = use_signal(|| false);
     let mut input_find_query = use_signal(String::new);
-    let mut input_replace_query = use_signal(String::new);
+    let input_replace_query = use_signal(String::new);
     let mut input_match_positions = use_signal(Vec::<usize>::new);
     let mut input_current_match_idx = use_signal(|| 0usize);
 
@@ -21,13 +22,15 @@ pub fn JsonFormatterTool() -> Element {
     let mut output_show_find = use_signal(|| false);
     let mut output_show_replace = use_signal(|| false);
     let mut output_find_query = use_signal(String::new);
-    let mut output_replace_query = use_signal(String::new);
+    let output_replace_query = use_signal(String::new);
     let mut output_match_positions = use_signal(Vec::<usize>::new);
     let mut output_current_match_idx = use_signal(|| 0usize);
 
     // 在"输出区（格式化后）"上做二次高亮（文本，非位置等价）
     let mut highlighted_output = use_signal(String::new);
-    let mut focused_panel = use_signal(|| "input".to_string()); // "input" or "output"
+
+    // 当前活动侧（不是“焦点”而是“光标/鼠标所在侧”）："input" 或 "output"
+    let mut active_panel = use_signal(|| "input".to_string());
 
     // ========== 公用：根据输入刷新输出与高亮 ==========
     let mut repaint = {
@@ -65,7 +68,9 @@ pub fn JsonFormatterTool() -> Element {
     };
 
     // 初次渲染
-    use_effect(move || repaint());
+    {
+        use_effect(move || repaint());
+    }
 
     // ========== 输入面板查找逻辑 ==========
     let mut input_recompute_matches = {
@@ -97,7 +102,6 @@ pub fn JsonFormatterTool() -> Element {
             input_current_match_idx.set((idx + 1) % total);
         }
     };
-
     let mut input_prev_match = {
         move |_| {
             let total = input_match_positions.read().len();
@@ -184,7 +188,6 @@ pub fn JsonFormatterTool() -> Element {
             output_current_match_idx.set((idx + 1) % total);
         }
     };
-
     let mut output_prev_match = {
         move |_| {
             let total = output_match_positions.read().len();
@@ -196,8 +199,8 @@ pub fn JsonFormatterTool() -> Element {
         }
     };
 
-    // ========== 键盘快捷键（只在本面板生效） ==========
-    // Cmd/Ctrl+F：打开/聚焦查找（根据焦点面板）
+    // ========== 键盘快捷键 ==========
+    // Cmd/Ctrl+F：打开/聚焦查找（根据“活动侧”）
     // Cmd/Ctrl+H：展开替换（仅输入面板）
     // Cmd/Ctrl+G / Shift+Cmd/Ctrl+G：下一个/上一个
     let on_keydown = {
@@ -210,29 +213,39 @@ pub fn JsonFormatterTool() -> Element {
             match e.code() {
                 Code::KeyF if meta => {
                     e.stop_propagation();
-                    if *focused_panel.read() == "input" {
+                    if *active_panel.read() == "input" {
                         input_show_find.set(true);
                         input_show_replace.set(false);
                         input_find_query.set(String::new());
+                        // 互斥关闭另一侧
+                        output_show_find.set(false);
+                        output_show_replace.set(false);
                     } else {
                         output_show_find.set(true);
                         output_show_replace.set(false);
                         output_find_query.set(String::new());
+                        input_show_find.set(false);
+                        input_show_replace.set(false);
                     }
                 }
                 Code::KeyH if meta => {
                     e.stop_propagation();
-                    if *focused_panel.read() == "input" {
+                    if *active_panel.read() == "input" {
                         input_show_find.set(true);
                         input_show_replace.set(true);
+                        output_show_find.set(false);
+                        output_show_replace.set(false);
                     } else {
+                        // 输出侧不支持替换，你也可以把这一行改为 false
                         output_show_find.set(true);
                         output_show_replace.set(true);
+                        input_show_find.set(false);
+                        input_show_replace.set(false);
                     }
                 }
                 Code::KeyG if meta && !shift => {
                     e.stop_propagation();
-                    if *focused_panel.read() == "input" {
+                    if *active_panel.read() == "input" {
                         input_next_match(());
                     } else {
                         output_next_match(());
@@ -240,7 +253,7 @@ pub fn JsonFormatterTool() -> Element {
                 }
                 Code::KeyG if meta && shift => {
                     e.stop_propagation();
-                    if *focused_panel.read() == "input" {
+                    if *active_panel.read() == "input" {
                         input_prev_match(());
                     } else {
                         output_prev_match(());
@@ -249,14 +262,14 @@ pub fn JsonFormatterTool() -> Element {
                 Code::Enter if meta && !alt => {
                     // 替换当前（仅输入面板）
                     e.stop_propagation();
-                    if *focused_panel.read() == "input" {
+                    if *active_panel.read() == "input" {
                         input_replace_one(());
                     }
                 }
                 Code::Enter if meta && alt => {
                     // 全部替换（仅输入面板）
                     e.stop_propagation();
-                    if *focused_panel.read() == "input" {
+                    if *active_panel.read() == "input" {
                         input_replace_all(());
                     }
                 }
@@ -268,233 +281,99 @@ pub fn JsonFormatterTool() -> Element {
     // ========== 输入变更：自动格式化 ==========
     let on_input_change = {
         move |e: Event<FormData>| {
+            active_panel.set("input".to_string()); // 认为此时活动在左侧
             input.set(e.value().to_string());
             repaint();
         }
     };
 
-    // ========== 渲染 ==========
+    // ====== 渲染 ======
     rsx! {
         div {
             class: "tool-container",
-            style: "display: flex; flex-direction: column; height: 100%; background-color: #1e1e1e; color: #cccccc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;",
             tabindex: "0",
             onkeydown: on_keydown,
+            style: "display:flex; flex-direction:column; height:100%; background:#1e1e1e; color:#ccc;",
 
-            // 主体：输入/输出
             div {
                 class: "input-output-container",
-                style: "display: flex; flex: 1; padding: 16px; gap: 16px; overflow: hidden;",
+                style: "display:flex; flex:1; padding:16px; gap:16px; overflow:hidden;",
 
-                // 输入
+                // 左侧：输入
                 div {
                     class: "input-panel",
-                    style: "flex: 1; display: flex; flex-direction: column; border: 1px solid #3c3c3c; border-radius: 6px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.2);",
-                    onfocus: move |_| focused_panel.set("input".to_string()),
-                    onfocusin: move |_| focused_panel.set("input".to_string()),
+                    style: "flex:1; display:flex; flex-direction:column; border:1px solid #3c3c3c; border-radius:6px; overflow:hidden; user-select:none; -webkit-user-select:none; -moz-user-select:none; -ms-user-select:none;",
+
+                    // —— 查找条（SearchBar）
+                    SearchBar {
+                        show: input_show_find,
+                        show_replace: input_show_replace,
+                        query: input_find_query,
+                        replace: input_replace_query,
+                        on_prev: move |_| input_prev_match(()),
+                        on_next: move |_| input_next_match(()),
+                        on_close: move |_| { input_show_find.set(false); input_show_replace.set(false); },
+                        on_query_input: move |q| { input_find_query.set(q); input_recompute_matches(); },
+                        on_replace_one: Some(EventHandler::new(move |_| input_replace_one(()))),
+                        on_replace_all: Some(EventHandler::new(move |_| input_replace_all(()))),
+                        replace_disabled: false,
+                    }
+
+                    // —— 标题
                     h3 {
-                        style: "margin: 0; padding: 12px 16px; background: #2d2d30; font-size: 14px; font-weight: 600; flex: 0 0 auto; border-bottom: 1px solid #3c3c3c;",
+                        style: "margin:0; padding:12px 16px; background:#2d2d30; font-size:14px; font-weight:600; border-bottom:1px solid #3c3c3c;",
                         "输入"
                     }
 
-                    // 输入面板的搜索框（默认隐藏，只在 Cmd/Ctrl+F 打开）
-                    if *input_show_find.read() {
-                        div {
-                            style: "display: flex; flex-direction: column; gap: 0; padding: 0; background: #333333; border-bottom: 1px solid #3c3c3c;",
-
-                            // 查找行
-                            div {
-                                style: "display: flex; gap: 0; align-items: center; padding: 6px;",
-                                // 展开/收起替换行按钮
-                                button {
-                                    style: "background: transparent; color: #cccccc; border: none; width: 28px; height: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; border-radius: 4px; margin-right: 4px;",
-                                    onclick: {
-                                        move |_| {
-                                            let current = *input_show_replace.read();
-                                            input_show_replace.set(!current);
-                                        }
-                                    },
-                                    if *input_show_replace.read() { "▼" } else { "▶" }
-                                }
-                                input {
-                                    style: "flex: 1; background: #ffffff; color: #000000; border: 1px solid #454545; padding: 6px 10px; font-family: 'Monaco', 'Consolas', monospace; font-size: 13px; border-radius: 4px; margin-right: 6px;",
-                                    value: "{input_find_query}",
-                                    placeholder: "查找",
-                                    oninput: {
-                                          move |e: Event<FormData>| {
-                                            input_find_query.set(e.value().clone());
-                                            input_recompute_matches();
-                                        }
-                                    },
-                                    onkeydown: move |e: KeyboardEvent| {
-                                        if e.code() == Code::Enter && e.modifiers().is_empty() {
-                                            e.stop_propagation();
-                                            input_next_match(());
-                                        } else if e.code() == Code::Enter && e.modifiers().contains(Modifiers::SHIFT) {
-                                            e.stop_propagation();
-                                            input_prev_match(());
-                                        }
-                                    }
-                                }
-                                button {
-                                    style: "background: #3c3c3c; color: #cccccc; border: 1px solid #555; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-right: 4px;",
-                                    onclick: move |_| input_prev_match(()),
-                                    "↑"
-                                }
-                                button {
-                                    style: "background: #3c3c3c; color: #cccccc; border: 1px solid #555; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-right: 6px;",
-                                    onclick: move |_| input_next_match(()),
-                                    "↓"
-                                }
-                                button {
-                                    style: "background: #3c3c3c; color: #cccccc; border: 1px solid #555; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;",
-                                    onclick: move |_| input_show_find.set(false),
-                                    "✕"
-                                }
-                            }
-
-                            // 替换行
-                            if *input_show_replace.read() {
-                                div {
-                                    style: "display: flex; gap: 6px; align-items: center; padding: 6px; border-top: 1px solid #3c3c3c;",
-                                    input {
-                                        style: "flex: 1; background: #ffffff; color: #000000; border: 1px solid #454545; padding: 6px 10px; font-family: 'Monaco', 'Consolas', monospace; font-size: 13px; border-radius: 4px;",
-                                        value: "{input_replace_query}",
-                                        placeholder: "替换为",
-                                        oninput: move |e| input_replace_query.set(e.value().clone()),
-                                    }
-                                    button {
-                                        style: "background: #3c3c3c; color: #cccccc; border: 1px solid #555; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;",
-                                        onclick: move |_| input_replace_one(()),
-                                        "替换"
-                                    }
-                                    button {
-                                        style: "background: #007acc; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;",
-                                        onclick: move |_| input_replace_all(()),
-                                        "全部替换"
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // 输入编辑器
-                    div {
-                        style: "flex: 1; display: flex; flex-direction: column; overflow: hidden;",
-                        textarea {
-                            style: "flex: 1; background: #1e1e1e; color: #cccccc; border: none; padding: 16px; resize: none; font-family: 'Monaco', 'Consolas', monospace; font-size: 13px; overflow: auto; line-height: 1.5;",
-                            value: "{input}",
-                            oninput: on_input_change,
-                            onfocus: move |_| focused_panel.set("input".to_string()),
-                            onfocusin: move |_| focused_panel.set("input".to_string()),
-                            placeholder: "在此输入 JSON 数据..."
-                        }
+                    // —— 输入编辑器（给定 id，并更新 active_panel）
+                    textarea {
+                        id: "json-input",
+                        style: "flex:1; background:#1e1e1e; color:#cccccc; border:none; padding:16px; resize:none; font-family:'Monaco','Consolas',monospace; font-size:13px; overflow:auto; line-height:1.5;",
+                        value: "{input}",
+                        oninput: on_input_change,
+                        onclick: move |_| active_panel.set("input".to_string()),
+                        onfocus: move |_| active_panel.set("input".to_string()),
+                        onfocusin: move |_| active_panel.set("input".to_string()),
+                        onmouseenter: move |_| active_panel.set("input".to_string()),
+                        placeholder: "在此输入 JSON 数据..."
                     }
                 }
 
-                // 输出（格式化 + 高亮）
+                // 右侧：输出
                 div {
-                    class: "output-search-container",
-                    style: "flex: 1; display: flex; flex-direction: column; border: 1px solid #3c3c3c; border-radius: 6px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.2);",
-                    onfocus: move |_| focused_panel.set("output".to_string()),
-                    onfocusin: move |_| focused_panel.set("output".to_string()),
+                    class: "output-panel",
+                    style: "flex:1; display:flex; flex-direction:column; border:1px solid #3c3c3c; border-radius:6px; overflow:hidden; user-select:none; -webkit-user-select:none; -moz-user-select:none; -ms-user-select:none;",
+
+                    // —— 查找条（SearchBar，禁用替换）
+                    SearchBar {
+                        show: output_show_find,
+                        show_replace: output_show_replace,
+                        query: output_find_query,
+                        replace: output_replace_query,
+                        on_prev: move |_| output_prev_match(()),
+                        on_next: move |_| output_next_match(()),
+                        on_close: move |_| { output_show_find.set(false); output_show_replace.set(false); },
+                        on_query_input: move |q| { output_find_query.set(q); output_recompute_matches(); },
+                        on_replace_one: None,
+                        on_replace_all: None,
+                        replace_disabled: true,
+                    }
+
+                    h3 {
+                        style: "margin:0; padding:12px 16px; background:#2d2d30; font-size:14px; font-weight:600; border-bottom:1px solid #3c3c3c;",
+                        "输出"
+                    }
+
+                    // —— 高亮输出视图（可聚焦，更新 active_panel）
                     div {
-                        class: "output-panel",
-                        style: "flex: 1; display: flex; flex-direction: column; overflow: hidden;",
-                        h3 {
-                            style: "margin: 0; padding: 12px 16px; background: #2d2d30; font-size: 14px; font-weight: 600; flex: 0 0 auto; border-bottom: 1px solid #3c3c3c;",
-                            "输出"
-                        }
-
-                        // 输出面板的搜索框（默认隐藏，只在 Cmd/Ctrl+F 打开）
-                        if *output_show_find.read() {
-                            div {
-                                style: "display: flex; flex-direction: column; gap: 0; padding: 0; background: #333333; border-bottom: 1px solid #3c3c3c;",
-
-                                // 查找行
-                                div {
-                                    style: "display: flex; gap: 0; align-items: center; padding: 6px;",
-                                    // 展开/收起替换行按钮（输出面板替换禁用）
-                                    button {
-                                        style: "background: transparent; color: #cccccc; border: none; width: 28px; height: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; border-radius: 4px; margin-right: 4px;",
-                                        onclick: {
-                                            move |_| {
-                                                let current = *output_show_replace.read();
-                                                output_show_replace.set(!current);
-                                            }
-                                        },
-                                        if *output_show_replace.read() { "▼" } else { "▶" }
-                                    }
-                                    input {
-                                        style: "flex: 1; background: #ffffff; color: #000000; border: 1px solid #454545; padding: 6px 10px; font-family: 'Monaco', 'Consolas', monospace; font-size: 13px; border-radius: 4px; margin-right: 6px;",
-                                        value: "{output_find_query}",
-                                        placeholder: "查找",
-                                        oninput: {
-                                                move |e: Event<FormData>| {
-                                                output_find_query.set(e.value().clone());
-                                                output_recompute_matches();
-                                            }
-                                        },
-                                        onkeydown: move |e: KeyboardEvent| {
-                                            if e.code() == Code::Enter && e.modifiers().is_empty() {
-                                                e.stop_propagation();
-                                                output_next_match(());
-                                            } else if e.code() == Code::Enter && e.modifiers().contains(Modifiers::SHIFT) {
-                                                e.stop_propagation();
-                                                output_prev_match(());
-                                            }
-                                        }
-                                    }
-                                    button {
-                                        style: "background: #3c3c3c; color: #cccccc; border: 1px solid #555; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-right: 4px;",
-                                        onclick: move |_| output_prev_match(()),
-                                        "↑"
-                                    }
-                                    button {
-                                        style: "background: #3c3c3c; color: #cccccc; border: 1px solid #555; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-right: 6px;",
-                                        onclick: move |_| output_next_match(()),
-                                        "↓"
-                                    }
-                                    button {
-                                        style: "background: #3c3c3c; color: #cccccc; border: 1px solid #555; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;",
-                                        onclick: move |_| output_show_find.set(false),
-                                        "✕"
-                                    }
-                                }
-
-                                // 替换行（禁用，仅占位保持 UI 一致性）
-                                if *output_show_replace.read() {
-                                    div {
-                                        style: "display: flex; gap: 6px; align-items: center; padding: 6px; border-top: 1px solid #3c3c3c;",
-                                        input {
-                                            style: "flex: 1; background: #454545; color: #999999; border: 1px solid #555; padding: 6px 10px; font-family: 'Monaco', 'Consolas', monospace; font-size: 13px; border-radius: 4px;",
-                                            value: "{output_replace_query}",
-                                            placeholder: "替换为",
-                                            oninput: move |e| output_replace_query.set(e.value().clone()),
-                                            disabled: true,
-                                        }
-                                        button {
-                                            style: "background: #333; color: #666; border: 1px solid #444; padding: 6px 10px; border-radius: 4px; cursor: not-allowed; font-size: 12px;",
-                                            disabled: true,
-                                            "替换"
-                                        }
-                                        button {
-                                            style: "background: #005a9e; color: #999; border: none; padding: 6px 12px; border-radius: 4px; cursor: not-allowed; font-size: 12px;",
-                                            disabled: true,
-                                            "全部替换"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // 输出高亮视图
-                        div {
-                            style: "flex: 1; background: #1e1e1e; color: #cccccc; margin: 0; padding: 16px; overflow: auto; white-space: pre-wrap; font-family: 'Monaco', 'Consolas', monospace; font-size: 13px; line-height: 1.5;",
-                            dangerous_inner_html: "{highlighted_output.read().clone()}",
-                            onfocus: move |_| focused_panel.set("output".to_string()),
-                            onfocusin: move |_| focused_panel.set("output".to_string()),
-                        }
+                        id: "json-output",
+                        tabindex: "0",
+                        style: "flex:1; background:#1e1e1e; color:#cccccc; margin:0; padding:16px; overflow:auto; white-space:pre-wrap; font-family:'Monaco','Consolas',monospace; font-size:13px; line-height:1.5;",
+                        dangerous_inner_html: "{highlighted_output.read().clone()}",
+                        onclick: move |_| active_panel.set("output".to_string()),
+                        onfocus: move |_| active_panel.set("output".to_string()),
+                        onfocusin: move |_| active_panel.set("output".to_string()),
+                        onmouseenter: move |_| active_panel.set("output".to_string()),
                     }
                 }
             }
@@ -509,104 +388,4 @@ pub fn JsonFormatterTool() -> Element {
             }
         }
     }
-}
-
-/* ===================== 辅助渲染 ===================== */
-
-// 在格式化 JSON 上做语法高亮并叠加"搜索高亮"
-fn highlight_json_with_search(json: &str, query: &str) -> String {
-    let mut html = highlight_json(json);
-
-    if !query.is_empty() {
-        // 当前命中：加强色（简单文本级处理）
-        let strong = format!(
-            "<span style=\"background:#ffcc00;color:#000;\">{}</span>",
-            html_escape::encode_text(query)
-        );
-        if let Some(pos) = html.find(query) {
-            html = format!("{}{}{}", &html[..pos], strong, &html[pos + query.len()..]);
-            let weak = format!(
-                "<span style=\"background:rgba(255,204,0,0.35);\">{}</span>",
-                html_escape::encode_text(query)
-            );
-            html = html.replace(query, &weak);
-        }
-    }
-    html
-}
-
-// 语法高亮（简化词法）
-fn highlight_json(json: &str) -> String {
-    let mut result = String::new();
-    let mut chars = json.chars().peekable();
-    let mut in_string = false;
-    let mut is_key = false;
-    let mut escape = false;
-
-    while let Some(ch) = chars.next() {
-        match ch {
-            '"' if !escape => {
-                in_string = !in_string;
-                if in_string {
-                    if is_key {
-                        result.push_str("<span style=\"color: #9cdcfe\">\"");
-                    } else {
-                        result.push_str("<span style=\"color: #ce9178\">\"");
-                    }
-                } else {
-                    result.push_str("\"</span>");
-                    if is_key {
-                        is_key = false;
-                    }
-                }
-            }
-            ':' if !in_string => {
-                result.push(':');
-                is_key = false;
-            }
-            '{' | '[' if !in_string => {
-                result.push(ch);
-                is_key = true;
-            }
-            '}' | ']' if !in_string => {
-                result.push(ch);
-            }
-            ',' if !in_string => {
-                result.push(ch);
-                is_key = true;
-            }
-            't' if !in_string && chars.peek() == Some(&'r') => {
-                result.push_str("<span style=\"color: #569cd6\">t");
-                chars.next();
-                chars.next();
-                chars.next();
-                result.push_str("rue</span>");
-            }
-            'f' if !in_string && chars.peek() == Some(&'a') => {
-                result.push_str("<span style=\"color: #569cd6\">f");
-                chars.next();
-                chars.next();
-                chars.next();
-                chars.next();
-                result.push_str("alse</span>");
-            }
-            'n' if !in_string && chars.peek() == Some(&'u') => {
-                result.push_str("<span style=\"color: #569cd6\">n");
-                chars.next();
-                chars.next();
-                chars.next();
-                result.push_str("ull</span>");
-            }
-            '\\' if in_string => {
-                escape = true;
-                result.push(ch);
-                continue;
-            }
-            _ => {
-                result.push(ch);
-            }
-        }
-        escape = false;
-    }
-    result
 }

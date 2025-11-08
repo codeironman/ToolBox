@@ -13,10 +13,10 @@ pub fn TimestampTool() -> Element {
             .unwrap_or_default()
     });
 
-    let mut datetime_output = use_signal(|| String::new());
-    let mut datetime_input = use_signal(|| String::new());
-    let mut timestamp_output = use_signal(|| String::new());
-    let mut error_message = use_signal(|| String::new());
+    let mut datetime_output = use_signal(String::new);
+    let mut datetime_input = use_signal(String::new);
+    let mut timestamp_output = use_signal(String::new);
+    let mut error_message = use_signal(String::new);
 
     let convert_timestamp = move |_| {
         error_message.set(String::new());
