@@ -80,43 +80,177 @@ pub fn App() -> Element {
         }
     }
 }
-
-// 5) Sidebar（保持和你原来一致）
 #[component]
 fn Sidebar(app_state: Signal<AppState>) -> Element {
+    // --- 状态：宽度、是否收起、是否拖拽中、上一次鼠标x、收起前宽度 ---
+    let mut width = use_signal(|| 220.0_f32); // 当前宽度（展开时）
+    let collapsed = use_signal(|| false); // 是否收起（仅图标）
+    let mut dragging = use_signal(|| false); // 是否正在拖拽
+    let mut last_x = use_signal(|| 0.0_f32); // 上一次鼠标 x
+    let saved_width = use_signal(|| 220.0_f32); // 收起前记忆的宽度
+
+    // 限制/常量
+    let min_w: f32 = 160.0;
+    let max_w: f32 = 420.0;
+    let collapsed_w: f32 = 56.0;
+
+    // 工具列表
     let tools = vec![
         Tool::JsonFormatter,
         Tool::Base64Encoder,
         Tool::TimestampConverter,
     ];
 
+    // 当前显示宽度
+    let sidebar_w = if *collapsed.read() {
+        collapsed_w
+    } else {
+        *width.read()
+    };
+
+    // 双击：收起/展开
+    let toggle_collapse = {
+        let mut collapsed = collapsed;
+        let mut saved_width = saved_width;
+        let mut width = width;
+        move |_| {
+            if *collapsed.read() {
+                // 展开，恢复记忆宽度
+                let w = (*saved_width.read()).clamp(min_w, max_w);
+                width.set(w);
+                collapsed.set(false);
+            } else {
+                // 收起，记忆当前宽度
+                saved_width.set(*width.read());
+                collapsed.set(true);
+            }
+        }
+    };
+
+    // 按下把手：开始拖拽
+    let on_handle_mouse_down = {
+        let mut dragging = dragging;
+        let mut last_x = last_x;
+        move |e: MouseEvent| {
+            dragging.set(true);
+            last_x.set(e.client_coordinates().x as f32);
+        }
+    };
+
+    // 侧栏区域监听移动：拖拽时更新宽度（仅在未收起时生效）
+    let on_mouse_move = {
+        move |e: MouseEvent| {
+            if *dragging.read() && !*collapsed.read() {
+                let cx = e.client_coordinates().x as f32;
+                let delta = cx - *last_x.read();
+                last_x.set(cx);
+                let new_w = (*width.read() + delta).clamp(min_w, max_w);
+                width.set(new_w);
+            }
+        }
+    };
+
+    // 松开：结束拖拽
+    let on_mouse_up = {
+        move |_e: MouseEvent| {
+            if *dragging.read() {
+                dragging.set(false);
+            }
+        }
+    };
+
+    // 条目样式
+    let item_style = |active: bool, collapsed: bool| -> String {
+        let base = if active {
+            "cursor:pointer; padding:8px 10px; border-radius:8px; background:#2d2d30; color:#fff; border:1px solid #3c3c3c; font-weight:600;"
+        } else {
+            "cursor:pointer; padding:8px 10px; border-radius:8px; color:#ccc; border:1px solid transparent;"
+        };
+        if collapsed {
+            // 居中，仅显示图标
+            format!("{base} display:flex; align-items:center; justify-content:center; height:36px;")
+        } else {
+            // 图标 + 文本
+            format!("{base} display:flex; align-items:center; gap:10px; height:36px;")
+        }
+    };
+
     rsx! {
+        // 外层：包含侧栏与把手，侧栏上监听 move/up 便于拖拽
         div {
-            class: "sidebar",
-            style: "width: 50px; background: #333333; display: flex; flex-direction: column; align-items: center; padding-top: 10px;",
+            style: "display:flex; height:100%;",
+
+            // 侧栏容器
             div {
-                class: "tool-icons",
-                style: "display: flex; flex-direction: column; gap: 15px;",
-                {tools.into_iter().map(|tool| {
-                    let is_active = app_state().current_tool == tool;
-                    let background_style = if is_active { "background: #007acc; border-radius: 4px;" } else { "background: transparent;" };
-                    let style = format!(
-                        "border: none; width: 36px; height: 36px; border-radius: 4px; {} \
-                         cursor: pointer; display: flex; align-items: center; justify-content: center; \
-                         color: white; font-size: 18px;",
-                        background_style
-                    );
-                    rsx! {
-                        button {
-                            key: "{tool.name()}",
-                            class: "tool-button",
-                            style: "{style}",
-                            onclick: move |_| { app_state.write().current_tool = tool; },
-                            title: "{tool.name()}",
-                            "{tool.icon()}"
+                style: "width:{sidebar_w}px; background:#333333; display:flex; flex-direction:column; padding:10px 8px; box-sizing:border-box; user-select:none;",
+                ondoubleclick: toggle_collapse,
+                onmousemove: on_mouse_move,
+                onmouseup: on_mouse_up,
+
+                // 顶部标题（收起时缩略）
+         // 顶部标题（展开显示：图标+文字；收起显示：只有图标）
+                div {
+                    style: "
+                        color:#eee;
+                        font-size:15px;
+                        font-weight:700;
+                        margin-bottom:8px;
+                        text-align:center;
+                        user-select:none;
+                        display:flex;
+                        align-items:center;
+                        justify-content:center;
+                        gap:6px;
+                        height:32px;
+                    ",
+
+                    // 图标：展开 + 收起都显示
+                    span {
+                        style: "font-size:20px;",
+                        "🔧"
+                    }
+
+                    // 文本：只有展开时显示
+                    if !*collapsed.read() {
+                        span {
+                            style: "font-size:14px; color:#ddd;",
+                            "ToolBox"
                         }
                     }
-                })}
+                }
+
+                // 工具按钮区
+                div {
+                    style: "display:flex; flex-direction:column; gap:8px;",
+                    {tools.into_iter().map(|tool| {
+                        let is_active = app_state().current_tool == tool;
+                        let style = item_style(is_active, *collapsed.read());
+                        rsx!{
+                            div {
+                                key: "{tool.name()}",
+                                style: "{style}",
+                                onclick: move |_| { app_state.write().current_tool = tool; },
+                                title: "{tool.name()}",
+                                // 图标
+                                span { style: "font-size:18px;", "{tool.icon()}" }
+                                // 展开时显示文字
+                                if !*collapsed.read() {
+                                    span { style: "font-size:13px; color:#ddd;", "{tool.name()}" }
+                                }
+                            }
+                        }
+                    })}
+                }
+
+                // 占位撑满
+                div { style: "flex:1;" }
+            }
+
+            // 右侧拖拽把手（独立 6px）
+            div {
+                style: "width:6px; background:linear-gradient(90deg,#2b2b2b,#2f2f2f); cursor:col-resize;",
+                onmousedown: on_handle_mouse_down,
+                ondoubleclick: toggle_collapse,
             }
         }
     }

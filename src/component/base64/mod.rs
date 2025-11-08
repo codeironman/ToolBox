@@ -8,9 +8,9 @@ use dioxus::prelude::*;
 #[component]
 pub fn Base64Tool() -> Element {
     let mut input = use_signal(|| "Hello, World!".to_string());
-    let mut output = use_signal(|| String::new());
+    let mut output = use_signal(String::new);
     let mut mode = use_signal(|| "encode".to_string()); // "encode" or "decode"
-    let mut error_message = use_signal(|| String::new());
+    let mut error_message = use_signal(String::new);
 
     let process = move |_| {
         let input_str = input.read().clone();
