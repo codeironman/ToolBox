@@ -1,5 +1,3 @@
-mod view;
-
 use dioxus::prelude::*;
 use serde_json;
 
