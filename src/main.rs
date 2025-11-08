@@ -1,7 +1,6 @@
 use base64::{engine::general_purpose, Engine};
 use chrono::{DateTime, Local, NaiveDateTime, TimeZone, Utc};
 use dioxus::prelude::*;
-use serde_json;
 
 // ===== 业务模型 =====
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -69,17 +68,16 @@ fn App() -> Element {
     let mode = use_signal(|| default_mode(*tool.read()));
 
     // 双面板文本状态
-    let input = use_signal(|| String::new());
-    let output = use_signal(|| String::new());
-    let error = use_signal(|| String::new());
+    let input = use_signal(String::new);
+    let output = use_signal(String::new);
+    let error = use_signal(String::new);
 
     // 当切换工具时，重置模式为默认，并立刻重算输出
     use_effect({
-        let tool = tool.clone();
-        let mut mode = mode.clone();
-        let input = input.clone();
-        let mut output = output.clone();
-        let mut error = error.clone();
+        let tool = tool;
+        let mut mode = mode;
+        let mut output = output;
+        let mut error = error;
 
         move || {
             let m = default_mode(*tool.read());
@@ -106,11 +104,9 @@ fn App() -> Element {
 
     // 输入变更即刻处理
     let repaint = {
-        let tool = tool.clone();
-        let mode = mode.clone();
-        let input = input.clone();
-        let mut output = output.clone();
-        let mut error = error.clone();
+        let tool = tool;
+        let mut output = output;
+        let mut error = error;
         move || {
             let src = input.read().clone();
             if src.trim().is_empty() {
@@ -132,8 +128,8 @@ fn App() -> Element {
     };
 
     let on_input = {
-        let mut input = input.clone();
-        let mut repaint = repaint.clone();
+        let mut input = input;
+        let mut repaint = repaint;
         move |e: Event<FormData>| {
             input.set(e.value().to_string());
             repaint();
@@ -141,8 +137,8 @@ fn App() -> Element {
     };
 
     let on_select_mode = {
-        let mut mode = mode.clone();
-        let mut repaint = repaint.clone();
+        let mut mode = mode;
+        let mut repaint = repaint;
         move |new_mode: ToolMode| {
             mode.set(new_mode);
             repaint();
@@ -258,7 +254,7 @@ fn MainWorkspace(props: MainWorkspaceProps) -> Element {
                                 }
                             ),
                             onclick: {
-                                let on_select_mode = props.on_select_mode.clone();
+                                let on_select_mode = props.on_select_mode;
                                 move |_| on_select_mode.call(mode_value)
                             },
                             "{mode_label(mode_value)}"
@@ -366,7 +362,7 @@ fn json_minify(input: &str) -> Result<String, String> {
 
 // ===== 时间戳工具 =====
 fn ts_to_human(input: &str) -> Result<String, String> {
-    let raw = input.trim().replace('_', "").replace(',', "");
+    let raw = input.trim().replace(['_', ','], "");
     let n: i128 = raw
         .parse()
         .map_err(|_| "请输入整数型 Unix 时间戳（秒或毫秒）".to_string())?;
