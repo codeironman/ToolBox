@@ -20,8 +20,8 @@ enum Tool {
 impl Tool {
     fn name(&self) -> &'static str {
         match self {
-            Tool::JsonFormatter => "JSON 格式化",
-            Tool::Base64Encoder => "Base64 编解码",
+            Tool::JsonFormatter => "JSON格式化",
+            Tool::Base64Encoder => "Base64编解码",
             Tool::TimestampConverter => "时间戳转换",
         }
     }
@@ -92,9 +92,9 @@ pub fn App() -> Element {
                             margin:0;
                             color:#cccccc;
                             font-size:14px;
-                            font-weight:500;
+                            font-weight:700;
                             line-height:40px;
-                            pointer-events:none;   /* 不遮挡左右按钮点击 */
+                            pointer-events:none;;
                         ",
                         "{app_state().current_tool.name()}"
                     }
@@ -124,21 +124,22 @@ pub fn App() -> Element {
         }
     }
 }
-
-// ================= Sidebar =================
 #[component]
 fn Sidebar(app_state: Signal<AppState>) -> Element {
     // --- 状态：宽度、是否收起、是否拖拽中、上一次鼠标x、收起前宽度 ---
-    let mut width = use_signal(|| 220.0_f32); // 当前宽度（展开时）
-    let collapsed = use_signal(|| false); // 是否收起（仅图标）
+    let mut width = use_signal(|| 160.0_f32); // 当前宽度（展开时）
+    let mut collapsed = use_signal(|| false); // 是否收起（仅图标）
     let mut dragging = use_signal(|| false); // 是否正在拖拽
     let mut last_x = use_signal(|| 0.0_f32); // 上一次鼠标 x
-    let saved_width = use_signal(|| 220.0_f32); // 收起前记忆的宽度
+    let saved_width = use_signal(|| 160.0_f32); // 收起前记忆的宽度
 
     // 限制/常量
     let min_w: f32 = 160.0;
     let max_w: f32 = 420.0;
     let collapsed_w: f32 = 56.0;
+
+    // 阈值：小于等于该值就触发收起，避免来回抖动
+    let collapse_threshold: f32 = min_w + 2.0;
 
     // 工具列表
     let tools = vec![
@@ -167,30 +168,53 @@ fn Sidebar(app_state: Signal<AppState>) -> Element {
                 collapsed.set(false);
             } else {
                 // 收起，记忆当前宽度
-                saved_width.set(*width.read());
+                saved_width.set((*width.read()).clamp(min_w, max_w));
                 collapsed.set(true);
             }
         }
     };
 
-    // 按下把手：开始拖拽
+    // 按下把手：开始拖拽（收起状态下立刻展开再拖）
     let on_handle_mouse_down = {
-        let mut dragging = dragging;
-        let mut last_x = last_x;
         move |e: MouseEvent| {
+            if *collapsed.read() {
+                let w = (*saved_width.read()).clamp(min_w, max_w);
+                width.set(w);
+                collapsed.set(false);
+            }
             dragging.set(true);
             last_x.set(e.client_coordinates().x as f32);
         }
     };
 
-    // 侧栏区域监听移动：拖拽时更新宽度（仅在未收起时生效）
+    // 侧栏区域监听移动：拖拽时更新宽度（展开模式下）
     let on_mouse_move = {
+        let mut dragging = dragging;
+        let mut last_x = last_x;
+        let mut width = width;
+        let mut collapsed = collapsed;
+        let mut saved_width = saved_width;
+
         move |e: MouseEvent| {
             if *dragging.read() && !*collapsed.read() {
                 let cx = e.client_coordinates().x as f32;
                 let delta = cx - *last_x.read();
                 last_x.set(cx);
-                let new_w = (*width.read() + delta).clamp(min_w, max_w);
+
+                let current_w = *width.read();
+                let proposed_w = current_w + delta;
+
+                // 到达最小阈值 => 自动收起
+                if proposed_w <= collapse_threshold {
+                    // 记住最后一个展开宽度（clamp 以防越界）
+                    saved_width.set(current_w.clamp(min_w, max_w));
+                    collapsed.set(true);
+                    dragging.set(false); // 停止本次拖拽，避免立刻又展开/跳动
+                    return;
+                }
+
+                // 否则正常更新宽度
+                let new_w = proposed_w.clamp(min_w, max_w);
                 width.set(new_w);
             }
         }
@@ -198,6 +222,7 @@ fn Sidebar(app_state: Signal<AppState>) -> Element {
 
     // 松开：结束拖拽
     let on_mouse_up = {
+        let mut dragging = dragging;
         move |_e: MouseEvent| {
             if *dragging.read() {
                 dragging.set(false);
@@ -250,7 +275,7 @@ fn Sidebar(app_state: Signal<AppState>) -> Element {
                     ",
 
                     // 图标：展开 + 收起都显示
-                    span { style: "font-size:20px;", "🔧" }
+                    span { style: "font-size:30px;", "🔧" }
 
                     // 文本：只有展开时显示
                     if !*collapsed.read() {
