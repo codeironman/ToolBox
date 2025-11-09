@@ -40,7 +40,7 @@ impl Tool for TimestampTool {
 }
 
 fn ts_to_human(input: &str) -> ProcessResult {
-    let raw = input.trim().replace('_', "").replace(',', "");
+    let raw = input.trim().replace(['_', ','], "");
     if raw.is_empty() {
         return Ok(String::new());
     }
