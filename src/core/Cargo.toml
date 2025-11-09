@@ -1,0 +1,11 @@
+# crates/core/Cargo.toml
+[package]
+name = "toolbox-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+chrono = { version = "0.4.38", features = ["clock", "std", "serde"] }
+chrono-tz = "0.8.6"
+once_cell = "1"
+ctor = "0.6.1"
