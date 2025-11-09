@@ -17,15 +17,14 @@ desktop = ["dioxus/desktop"]
 web = ["dioxus/web"]
 
 [dependencies]
-dioxus = { version = "0.6", features = ["desktop"] } # 或 web
+dioxus = { version = "0.6", features = ["desktop"] }   # 或 web
 serde_json = "1"
 base64 = "0.22"
 chrono = { version = "0.4", features = ["clock"] }
+serde = { version = "1.0.228", features = ["derive"] }
+html-escape = "0.2.13"
+chrono-tz = "0.10.4"
 
 [workspace]
-members = [
-    "src/core",
-    "src/tools",
-    "src/ui",
-]
+members = ["src/core", "src/tools", "src/ui"]
 resolver = "2"

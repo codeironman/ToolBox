@@ -17,7 +17,6 @@ pub struct ProcessError {
 
 pub type ProcessResult = Result<String, ProcessError>;
 
-/// 模式描述（用字符串 id，方便后续从配置/远端加载）
 #[derive(Clone, Debug)]
 pub struct Mode {
     pub id: &'static str,
@@ -38,7 +37,7 @@ pub trait Tool: Send + Sync {
     fn process(&self, mode_id: &str, input: &str) -> ProcessResult;
 }
 
-/// 简单的全局注册表（编译期注册，运行期读取）
+#[derive(Default)]
 pub struct Registry {
     inner: Vec<Arc<dyn Tool>>,
 }
@@ -59,7 +58,6 @@ impl Registry {
     }
 }
 
-/// 全局可用的注册表（由 tools 模块在加载时填充）
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
 
