@@ -1,0 +1,30 @@
+# ===== Rust / Cargo =====
+/target/
+/debug/
+/release/
+
+# Rust toolchain
+**/*.rs.bk
+
+# ===== Dioxus Desktop (macOS / Windows / Linux) =====
+dist/
+dioxus-assets/
+.dioxus/
+.dioxus-build/    
+
+# ===== IDE / Editor =====
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# IntelliJ / CLion / IDEA / Android Studio
+.idea/
+*.iml
+
+# ===== macOS 系统文件 =====
+.DS_Store
+
+# ===== Temporary files =====
+*.log
+*.tmp
