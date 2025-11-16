@@ -28,3 +28,6 @@ dioxus-assets/
 # ===== Temporary files =====
 *.log
 *.tmp
+
+/target
+dist

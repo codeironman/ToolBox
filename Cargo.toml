@@ -10,6 +10,7 @@ web = ["dioxus/web"]
 
 [dependencies]
 dioxus = { version = "0.6", features = ["desktop"] }
+dioxus-desktop = { version = "0.5" }
 serde_json = "1"
 base64 = "0.22"
 chrono = { version = "0.4", features = ["clock"] }
@@ -20,3 +21,38 @@ chrono-tz = "0.10.4"
 [workspace]
 members = ["src/core", "src/tools", "src/ui"]
 resolver = "2"
+
+
+[profile.release]
+opt-level = "z"   # 尽可能小
+lto = true        # 启用链接时优化
+codegen-units = 1 # 让编译器更努力优化体积
+panic = "abort"
+strip = true      # 去除符号表
+
+[profile.wasm-dev]
+inherits = "dev"
+opt-level = 1
+
+[profile.server-dev]
+inherits = "dev"
+
+[profile.android-dev]
+inherits = "dev"
+
+[package.metadata.bundle]
+name = "Toolbox"
+identifier = "com.caofengyi.toolbox"
+version = "1.0.0"
+icon = ["toolbox.icns"]              # <-- 自己放图标
+resources = []
+copyright = "© 2025"
+category = "DeveloperTool"
+
+# macOS 特定配置
+[package.metadata.bundle.macos]
+minimum_system_version = "10.13"
+frameworks = []
+
+[build-dependencies]
+tauri-bundler = "1.5"

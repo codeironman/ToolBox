@@ -8,21 +8,13 @@ asset_dir = "assets"
 width = 600
 height = 400
 
-[web.app]
-title = "Toolbox"
 
-[web.watcher]
-watch_path = ["src", "assets"]
+[bundle]
+identifier = "com.caofengyi.toolbox"
+publisher = "caofengyi"
+icon = ["./icons/toolbox.icns"]
 
-[web.resource]
-style = []
-script = []
 
-[web.resource.dev]
-script = []
-
-[web.proxy]
-backend = "http://localhost:8000/api"
-
-[web.server]
-port = 8080
+[platform.macos]
+bundle = true
+dmg = true

@@ -1,0 +1,15 @@
+[package]
+product_name = "ToolBox"
+version = "0.1.0"
+authors = ["caofengyi"]
+identifier = "com.caofengyi.toolbox"
+category = "DeveloperTool"
+binary = "toolbox"
+
+[platform.macos]
+bundle_format = "app"
+dmg = true
+icon = ["./icons/toolbox.icns"]
+sign = false
+
+
