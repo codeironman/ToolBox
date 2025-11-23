@@ -44,8 +44,8 @@ inherits = "dev"
 name = "Toolbox"
 identifier = "com.caofengyi.toolbox"
 version = "1.0.0"
-icon = ["toolbox.icns"]              # <-- 自己放图标
-resources = []
+icon = ["./icons/toolbox.icns"]              # <-- 自己放图标
+resources = ["icons/"]
 copyright = "© 2025"
 category = "DeveloperTool"
 
