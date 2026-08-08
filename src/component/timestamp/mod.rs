@@ -18,7 +18,7 @@ pub fn TimestampTool() -> Element {
     let mut error_message = use_signal(String::new);
 
     // 固定高度（结果框）
-    const BOX_H: i32 = 32;
+    const BOX_H: i32 = 34;
 
     // --- 操作：时间戳 -> 日期时间 ---
     let convert_ts_to_dt = move |_| {
@@ -86,104 +86,44 @@ pub fn TimestampTool() -> Element {
     };
 
     // --- UI 样式 ---
-    let card_top = |title: &str| -> String {
-        // 第一条卡片保留更紧凑的内边距/间距
-        format!(
-            "display:flex; flex-direction:column; gap:10px; \
-             border:1px solid #343434; border-radius:10px; \
-             background:linear-gradient(180deg,#232323,#1f1f1f); \
-             padding:12px 14px 10px; box-shadow: 0 6px 18px rgba(0,0,0,0.25); \
-             --title:'{title}';"
-        )
-    };
-    let card = |title: &str| -> String {
-        format!(
-            "display:flex; flex-direction:column; gap:12px; \
-             border:1px solid #343434; border-radius:10px; \
-             background:linear-gradient(180deg,#232323,#1f1f1f); \
-             padding:16px 16px 14px; box-shadow: 0 6px 18px rgba(0,0,0,0.25); \
-             --title:'{title}';"
-        )
-    };
-    let title_bar = "
-        display:flex; align-items:center; justify-content:space-between;
-        gap:8px; padding-bottom:6px; border-bottom:1px dashed #393939;
-    ";
-    let title_txt = "
-        font-size:14px; font-weight:700; letter-spacing:.3px; color:#e8e8e8;
-    ";
-    let desc_txt = "
-        font-size:11px; color:#a6a6a6;
-    ";
-    let label = "
-        font-size:12px; color:#cfcfcf; margin-bottom:4px;
-    ";
-    let input_css = "
-        background:#151515; color:#e0e0e0; border:1px solid #323232;
-        outline:none; border-radius:8px; padding:8px 10px;
-        font-family:'Monaco','Consolas',monospace; font-size:12px;
-        transition:border-color .15s ease, box-shadow .15s ease;
-    ";
-    // 固定宽高的只读结果框
+    let card_top = "display:flex; flex-direction:column; gap:10px; \
+        border:1px solid var(--border); border-radius:var(--radius); \
+        background:var(--bg-card); \
+        padding:12px 14px 10px; box-shadow:var(--shadow-card);";
+    let card = "display:flex; flex-direction:column; gap:12px; \
+        border:1px solid var(--border); border-radius:var(--radius); \
+        background:var(--bg-card); \
+        padding:16px 16px 14px; box-shadow:var(--shadow-card);";
+    let title_bar = "display:flex; align-items:center; justify-content:space-between; \
+        gap:8px; padding-bottom:6px; border-bottom:1px dashed var(--border-soft);";
+    let title_txt = "font-size:14px; font-weight:700; letter-spacing:.3px; color:var(--text-bright);";
+    let desc_txt = "font-size:11px; color:var(--text-dim);";
+    let label = "font-size:12px; color:var(--text); margin-bottom:4px;";
     let readonly_fixed = format!(
-        "
-    display:flex;
-    align-items:center;     
-    justify-content:flex-start;
-    background:#0f0f0f;
-    color:#d6d6d6;
-    border:1px solid #2d2d2d;
-    border-radius:8px;
-    padding:0 12px;
-    font-family:'Monaco','Consolas',monospace;
-    font-size:12px;
-    height:{box_h}px;
-    overflow:hidden;
-    white-space:nowrap;
-    ",
+        "display:flex; align-items:center; justify-content:flex-start; \
+        background:var(--bg-input); color:var(--text); border:1px solid var(--border); \
+        border-radius:var(--radius-sm); padding:0 12px; \
+        font-family:'Menlo','Monaco','Consolas',monospace; font-size:12px; \
+        height:{box_h}px; overflow:hidden; white-space:nowrap;",
         box_h = BOX_H
     );
-    let btn = |primary: bool| -> String {
-        if primary {
-            "padding:8px 14px; border-radius:8px; border:none; \
-             background:#0e7ad1; color:white; font-size:12px; \
-             cursor:pointer; box-shadow:0 6px 14px rgba(14,122,209,.25); \
-             transition:transform .05s ease; active:transform:translateY(1px);"
-                .to_string()
-        } else {
-            "padding:8px 14px; border-radius:8px; border:1px solid #3a3a3a; \
-             background:#252525; color:#d2d2d2; font-size:12px; cursor:pointer;"
-                .to_string()
-        }
-    };
 
     rsx! {
         // 整体容器
         div {
-            style: "height:100%; display:flex; flex-direction:column; gap:12px; padding:16px; background:#1b1b1b; color:#d0d0d0; overflow:auto;",
-
-            // 顶部标题（居中）
-            div {
-                style: "display:grid; grid-template-columns: 1fr auto 1fr; align-items:center; margin-top:-2px;",
-                div { style: "height:1px;" }
-                // h2 {
-                //     style: "margin:0; font-size:15px; font-weight:700; letter-spacing:.4px; color:#ededed;",
-                //     "时间戳转换"
-                // }
-                div { style: "height:1px; justify-self:end;" }
-            }
+            style: "height:100%; display:flex; flex-direction:column; gap:12px; padding:16px; background:var(--bg-app); color:var(--text); overflow:auto;",
 
             // 第一条：时间戳 -> 日期时间（更紧凑）
             div {
-                style: "{card_top(\"Timestamp → Datetime\")}",
+                style: "{card_top}",
 
-                // 标题行（去掉副标题，减少留白）
+                // 标题行
                 div {
                     style: "{title_bar}",
                     div {
                         style: "display:flex; align-items:center; gap:8px;",
                         span { style: "font-size:14px;", "⏱️" }
-                        span { style: "{title_txt}", "时间戳 → 日期时间" }
+                        span { style: "{title_txt}", "时间戳 -> 日期时间" }
                     }
                 }
 
@@ -192,7 +132,7 @@ pub fn TimestampTool() -> Element {
                     style: "display:flex; flex-direction:column; gap:4px;",
                     label { style: "{label}", "输入时间戳（秒或毫秒）" }
                     input {
-                        style: "{input_css}",
+                        class: "tb-input",
                         value: "{ts_input}",
                         oninput: move |e| ts_input.set(e.value().to_string()),
                         placeholder: "例如：1700000000 或 1700000000000"
@@ -202,7 +142,7 @@ pub fn TimestampTool() -> Element {
                 // 操作（紧凑）
                 div {
                     style: "display:flex; align-items:center; gap:10px; padding-top:2px; padding-bottom:4px;",
-                    button { style: "{btn(true)}", onclick: convert_ts_to_dt, "转换" }
+                    button { class: "tb-btn-primary", onclick: convert_ts_to_dt, "转换" }
                 }
 
                 // 结果区（固定宽高）
@@ -221,11 +161,11 @@ pub fn TimestampTool() -> Element {
                 }
             }
 
-              div { style: "height:5px;" }
+            div { style: "height:2px;" }
 
-            // 第二条：日期时间 → 时间戳
+            // 第二条：日期时间 -> 时间戳
             div {
-                style: "{card(\"Datetime → Timestamp\")}",
+                style: "{card}",
 
                 // 标题行
                 div {
@@ -233,7 +173,7 @@ pub fn TimestampTool() -> Element {
                     div {
                         style: "display:flex; align-items:center; gap:8px;",
                         span { style: "font-size:14px;", "📅" }
-                        span { style: "{title_txt}", "日期时间 → 时间戳" }
+                        span { style: "{title_txt}", "日期时间 -> 时间戳" }
                     }
                     span { style: "{desc_txt}", "格式：YYYY-MM-DD HH:MM:SS（按本地时区解释）" }
                 }
@@ -243,7 +183,7 @@ pub fn TimestampTool() -> Element {
                     style: "display:flex; flex-direction:column; gap:4px;",
                     label { style: "{label}", "输入日期时间" }
                     input {
-                        style: "{input_css}",
+                        class: "tb-input",
                         value: "{dt_input}",
                         oninput: move |e| dt_input.set(e.value().to_string()),
                         placeholder: "例如：2025-11-09 12:34:56"
@@ -253,9 +193,9 @@ pub fn TimestampTool() -> Element {
                 // 操作
                 div {
                     style: "display:flex; align-items:center; justify-content:space-between; padding-top:4px;",
-                    button { style: "{btn(true)}", onclick: convert_dt_to_ts, "转换" }
+                    button { class: "tb-btn-primary", onclick: convert_dt_to_ts, "转换" }
                     button {
-                        style: "{btn(false)}",
+                        class: "tb-btn",
                         onclick: move |_| { dt_input.set(current_local_datetime_string()); },
                         "填入当前本地时间"
                     }
@@ -280,9 +220,9 @@ pub fn TimestampTool() -> Element {
             // 错误提示
             if !error_message().is_empty() {
                 div {
-                    style: "margin-top:-2px; padding:10px 12px; border:1px solid #7f3a32; \
-                            background:linear-gradient(180deg,rgba(127,58,50,.18),rgba(127,58,50,.08)); \
-                            color:#ffb7a7; border-radius:10px; font-size:12px;",
+                    style: "margin-top:-2px; padding:10px 12px; border:1px solid var(--danger); \
+                            background:var(--danger-soft); \
+                            color:var(--danger); border-radius:var(--radius); font-size:12px;",
                     "{error_message}"
                 }
             }

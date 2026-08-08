@@ -4,12 +4,12 @@ use dioxus::prelude::*;
 pub struct SearchBarProps {
     /// 是否显示查找条
     pub show: Signal<bool>,
-    /// 是否展开替换行（右侧可传一个独立的 Signal，或传同一个并禁用替换按钮）
+    /// 是否展开替换行
     pub show_replace: Signal<bool>,
 
     /// 查找关键字
     pub query: Signal<String>,
-    /// 替换关键字（右侧若不需要可传入一个临时的 Signal，按钮禁用即可）
+    /// 替换关键字
     pub replace: Signal<String>,
 
     /// 上/下一处、关闭
@@ -17,16 +17,23 @@ pub struct SearchBarProps {
     pub on_next: EventHandler<()>,
     pub on_close: EventHandler<()>,
 
-    /// 查找输入变化时触发（外部重新计算匹配/高亮）
+    /// 查找输入变化时触发
     pub on_query_input: EventHandler<String>,
 
-    /// 点击“替换当前 / 全部替换”
+    /// 替换当前 / 全部替换
     pub on_replace_one: Option<EventHandler<()>>,
     pub on_replace_all: Option<EventHandler<()>>,
 
-    /// 是否禁用替换（右侧传 true）
+    /// 是否禁用替换（右侧输出面板传 true）
     #[props(default = false)]
     pub replace_disabled: bool,
+
+    /// 当前匹配索引（从 0 开始）
+    #[props(default = 0)]
+    pub match_current: usize,
+    /// 匹配总数
+    #[props(default = 0)]
+    pub match_total: usize,
 }
 
 #[component]
@@ -36,34 +43,16 @@ pub fn SearchBar(props: SearchBarProps) -> Element {
         return rsx! { Fragment {} };
     }
 
-    // 动态样式在 rsx! 外构造
     let disabled = props.replace_disabled;
-
-    let replace_input_bg = if disabled { "#454545" } else { "#ffffff" };
-    let replace_input_fg = if disabled { "#999999" } else { "#000000" };
-    let replace_input_style = format!(
-        "flex:1; background:{}; color:{}; border:1px solid #454545; padding:6px 10px; \
-         font-family:'Monaco','Consolas',monospace; font-size:13px; border-radius:4px;",
-        replace_input_bg, replace_input_fg
-    );
-
-    let replace_btn1_bg = if disabled { "#333333" } else { "#3c3c3c" };
-    let replace_btn1_fg = if disabled { "#666666" } else { "#cccccc" };
-    let replace_btn1_cursor = if disabled { "not-allowed" } else { "pointer" };
-    let replace_btn1_style = format!(
-        "background:{}; color:{}; border:1px solid #555; padding:6px 10px; \
-         border-radius:4px; cursor:{}; font-size:12px;",
-        replace_btn1_bg, replace_btn1_fg, replace_btn1_cursor
-    );
-
-    let replace_btn2_bg = if disabled { "#005a9e" } else { "#007acc" };
-    let replace_btn2_fg = if disabled { "#999999" } else { "#ffffff" };
-    let replace_btn2_cursor = if disabled { "not-allowed" } else { "pointer" };
-    let replace_btn2_style = format!(
-        "background:{}; color:{}; border:none; padding:6px 12px; \
-         border-radius:4px; cursor:{}; font-size:12px;",
-        replace_btn2_bg, replace_btn2_fg, replace_btn2_cursor
-    );
+    let total = props.match_total;
+    let cur = props.match_current;
+    // total==0 显示 "0/0"，否则 "{cur+1}/{total}"
+    let count_text = if total == 0 {
+        "0/0".to_string()
+    } else {
+        format!("{}/{}", cur + 1, total)
+    };
+    let count_color = if total == 0 { "#6a6a6a" } else { "var(--text-dim)" };
 
     // 预先克隆必要的信号/事件，避免在闭包内多次 borrow
     let mut show_replace_sig = props.show_replace;
@@ -73,27 +62,25 @@ pub fn SearchBar(props: SearchBarProps) -> Element {
 
     rsx! {
         div {
-            style: "display:flex; flex-direction:column; gap:0; padding:0; background:#333; border-bottom:1px solid #3c3c3c;",
+            style: "display:flex; flex-direction:column; gap:0; padding:0; background:var(--bg-header); border-bottom:1px solid var(--border);",
 
             // 查找行
             div {
-                style: "display:flex; gap:0; align-items:center; padding:6px;",
+                style: "display:flex; gap:6px; align-items:center; padding:6px 8px;",
 
                 // 展开/收起替换区
                 button {
-                    style: "background:transparent; color:#ccc; border:none; width:28px; height:28px; \
-                            cursor:pointer; display:flex; align-items:center; justify-content:center; \
-                            font-size:16px; border-radius:4px; margin-right:4px;",
+                    class: "tb-icon-btn",
+                    style: "width:24px; height:24px; font-size:11px; margin-right:2px;",
                     onclick: move |_| {
-                        let cur = *show_replace_sig.read();
-                        show_replace_sig.set(!cur);
+                        let c = *show_replace_sig.read();
+                        show_replace_sig.set(!c);
                     },
                     if *props.show_replace.read() { "▼" } else { "▶" }
                 }
 
                 input {
-                    style: "flex:1; background:#fff; color:#000; border:1px solid #454545; padding:6px 10px; \
-                            font-family:'Monaco','Consolas',monospace; font-size:13px; border-radius:4px; margin-right:6px;",
+                    class: "tb-search-input",
                     value: "{props.query}",
                     placeholder: "查找",
                     oninput: move |e| props.on_query_input.call(e.value().clone()),
@@ -108,21 +95,27 @@ pub fn SearchBar(props: SearchBarProps) -> Element {
                     }
                 }
 
+                span {
+                    class: "tb-count",
+                    style: "color:{count_color};",
+                    "{count_text}"
+                }
+
                 button {
-                    style: "background:#3c3c3c; color:#ccc; border:1px solid #555; padding:6px 10px; \
-                            border-radius:4px; cursor:pointer; font-size:12px; margin-right:4px;",
+                    class: "tb-icon-btn",
+                    style: "width:26px; height:26px; font-size:14px;",
                     onclick: move |_| props.on_prev.call(()),
                     "↑"
                 }
                 button {
-                    style: "background:#3c3c3c; color:#ccc; border:1px solid #555; padding:6px 10px; \
-                            border-radius:4px; cursor:pointer; font-size:12px; margin-right:6px;",
+                    class: "tb-icon-btn",
+                    style: "width:26px; height:26px; font-size:14px;",
                     onclick: move |_| props.on_next.call(()),
                     "↓"
                 }
                 button {
-                    style: "background:#3c3c3c; color:#ccc; border:1px solid #555; padding:6px 10px; \
-                            border-radius:4px; cursor:pointer; font-size:12px;",
+                    class: "tb-icon-btn",
+                    style: "width:26px; height:26px; font-size:14px;",
                     onclick: move |_| props.on_close.call(()),
                     "✕"
                 }
@@ -131,10 +124,11 @@ pub fn SearchBar(props: SearchBarProps) -> Element {
             // 替换行
             if *props.show_replace.read() {
                 div {
-                    style: "display:flex; gap:6px; align-items:center; padding:6px; border-top:1px solid #3c3c3c;",
+                    style: "display:flex; gap:6px; align-items:center; padding:6px 8px; border-top:1px solid var(--border-soft);",
 
                     input {
-                        style: "{replace_input_style}",
+                        class: "tb-search-input",
+                        style: if disabled { "opacity:.5;" } else { "" },
                         value: "{props.replace}",
                         placeholder: "替换为",
                         disabled: "{disabled}",
@@ -147,7 +141,7 @@ pub fn SearchBar(props: SearchBarProps) -> Element {
 
                     // 替换当前
                     button {
-                        style: "{replace_btn1_style}",
+                        class: "tb-btn",
                         disabled: "{disabled}",
                         onclick: move |_| {
                             if !disabled {
@@ -161,7 +155,7 @@ pub fn SearchBar(props: SearchBarProps) -> Element {
 
                     // 全部替换
                     button {
-                        style: "{replace_btn2_style}",
+                        class: "tb-btn-primary",
                         disabled: "{disabled}",
                         onclick: move |_| {
                             if !disabled {

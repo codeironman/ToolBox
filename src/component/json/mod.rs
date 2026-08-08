@@ -26,19 +26,18 @@ pub fn JsonFormatterTool() -> Element {
     let mut output_match_positions = use_signal(Vec::<usize>::new);
     let mut output_current_match_idx = use_signal(|| 0usize);
 
-    // 在"输出区（格式化后）"上做二次高亮（文本，非位置等价）
+    // 在“输出区（格式化后）”上叠加语法高亮 + 搜索高亮
     let mut highlighted_output = use_signal(String::new);
 
-    // 当前活动侧（不是“焦点”而是“光标/鼠标所在侧”）："input" 或 "output"
+    // 当前活动侧："input" 或 "output"
     let mut active_panel = use_signal(|| "input".to_string());
 
-    // ========== 公用：根据输入刷新输出与高亮 ==========
+    // ========== 公用：根据输入刷新输出（仅格式化，高亮由下方 effect 负责） ==========
     let mut repaint = {
         move || {
             let src = input.read().clone();
             if src.trim().is_empty() {
                 output.set(String::new());
-                highlighted_output.set(String::new());
                 error_message.set(String::new());
                 return;
             }
@@ -46,21 +45,16 @@ pub fn JsonFormatterTool() -> Element {
             match serde_json::from_str::<serde_json::Value>(&src) {
                 Ok(v) => match serde_json::to_string_pretty(&v) {
                     Ok(formatted) => {
-                        output.set(formatted.clone());
+                        output.set(formatted);
                         error_message.set(String::new());
-                        let html =
-                            highlight_json_with_search(&formatted, &output_find_query.read());
-                        highlighted_output.set(html);
                     }
                     Err(e) => {
                         output.set(String::new());
-                        highlighted_output.set(String::new());
                         error_message.set(format!("格式化错误: {}", e));
                     }
                 },
                 Err(e) => {
                     output.set(String::new());
-                    highlighted_output.set(String::new());
                     error_message.set(format!("JSON 解析错误: {}", e));
                 }
             }
@@ -70,6 +64,32 @@ pub fn JsonFormatterTool() -> Element {
     // 初次渲染
     {
         use_effect(move || repaint());
+    }
+
+    // ========== 输出高亮 effect ==========
+    // 依赖 output / output_find_query / output_current_match_idx：
+    // 任一变化都重算匹配位置并重新高亮，因此“上一个/下一个”无需手动 repaint。
+    // 注意：内部用本地 pos/cur，不回读 output_match_positions，避免循环。
+    {
+        use_effect(move || {
+            let text = output.read().clone();
+            let q = output_find_query.read().clone();
+            let idx = *output_current_match_idx.read();
+
+            let mut pos = Vec::<usize>::new();
+            if !q.is_empty() && !text.is_empty() {
+                let mut start = 0usize;
+                while let Some(p) = text[start..].find(&q) {
+                    pos.push(start + p);
+                    start = start + p + q.len();
+                }
+            }
+            let cur = if pos.is_empty() { 0 } else { idx.min(pos.len() - 1) };
+
+            let html = highlight_json_with_search(&text, &q, &pos, cur);
+            output_match_positions.set(pos);
+            highlighted_output.set(html);
+        });
     }
 
     // ========== 输入面板查找逻辑 ==========
@@ -113,6 +133,29 @@ pub fn JsonFormatterTool() -> Element {
         }
     };
 
+    // 输入面板：选中并滚动到当前匹配（textarea 无法高亮，但可选中定位）
+    use_effect(move || {
+        let positions = input_match_positions.read().clone();
+        let idx = *input_current_match_idx.read();
+        let q = input_find_query.read().clone();
+        if positions.is_empty() || q.is_empty() {
+            return;
+        }
+        let idx = idx.min(positions.len() - 1);
+        let start = positions[idx];
+        let end = start + q.len();
+        // 字节位置 -> 字符索引（JS setSelectionRange 用 UTF-16 索引；
+        // 对 BMP 字符二者一致，含 emoji 等非 BMP 字符时略有偏差但不会报错）
+        let text = input.read().clone();
+        let s = text[..start].chars().count();
+        let e = text[..end].chars().count();
+        let js = format!(
+            "(function(){{var el=document.getElementById('json-input');if(!el)return;el.focus();try{{el.setSelectionRange({s},{e});}}catch(_){{}}var lh=parseFloat(getComputedStyle(el).lineHeight)||20;var lines=el.value.slice(0,{s}).split('\\n').length-1;el.scrollTop=Math.max(0,lines*lh-el.clientHeight/3);}})();",
+            s = s, e = e
+        );
+        dioxus::document::eval(&js);
+    });
+
     // ========== 输入面板替换逻辑 ==========
     let mut input_replace_one = {
         move |_| {
@@ -127,7 +170,7 @@ pub fn JsonFormatterTool() -> Element {
                 return;
             }
 
-            let idx = *input_current_match_idx.read();
+            let idx = (*input_current_match_idx.read()).min(positions.len().saturating_sub(1));
             let start = positions[idx];
             let end = start + q.len();
 
@@ -158,26 +201,14 @@ pub fn JsonFormatterTool() -> Element {
     };
 
     // ========== 输出面板查找逻辑 ==========
+    // query 变化时重置到第一个匹配；高亮由输出 effect 自动更新。
     let mut output_recompute_matches = {
         move || {
-            let text = output.read().clone();
-            let q = output_find_query.read().clone();
-            let mut pos = Vec::<usize>::new();
-
-            if !q.is_empty() && !text.is_empty() {
-                let mut start = 0usize;
-                while let Some(p) = text[start..].find(&q) {
-                    pos.push(start + p);
-                    start = start + p + q.len();
-                }
-            }
             output_current_match_idx.set(0);
-            output_match_positions.set(pos);
-            repaint(); // 重新高亮显示
         }
     };
 
-    // 输出面板下一个/上一个匹配
+    // 输出面板下一个/上一个匹配（高亮由 effect 自动跟随）
     let mut output_next_match = {
         move |_| {
             let total = output_match_positions.read().len();
@@ -201,7 +232,7 @@ pub fn JsonFormatterTool() -> Element {
 
     // ========== 键盘快捷键 ==========
     // Cmd/Ctrl+F：打开/聚焦查找（根据“活动侧”）
-    // Cmd/Ctrl+H：展开替换（仅输入面板）
+    // Cmd/Ctrl+H：展开替换
     // Cmd/Ctrl+G / Shift+Cmd/Ctrl+G：下一个/上一个
     let on_keydown = {
         move |e: Event<KeyboardData>| {
@@ -217,7 +248,6 @@ pub fn JsonFormatterTool() -> Element {
                         input_show_find.set(true);
                         input_show_replace.set(false);
                         input_find_query.set(String::new());
-                        // 互斥关闭另一侧
                         output_show_find.set(false);
                         output_show_replace.set(false);
                     } else {
@@ -236,7 +266,6 @@ pub fn JsonFormatterTool() -> Element {
                         output_show_find.set(false);
                         output_show_replace.set(false);
                     } else {
-                        // 输出侧不支持替换，你也可以把这一行改为 false
                         output_show_find.set(true);
                         output_show_replace.set(true);
                         input_show_find.set(false);
@@ -260,14 +289,12 @@ pub fn JsonFormatterTool() -> Element {
                     }
                 }
                 Code::Enter if meta && !alt => {
-                    // 替换当前（仅输入面板）
                     e.stop_propagation();
                     if *active_panel.read() == "input" {
                         input_replace_one(());
                     }
                 }
                 Code::Enter if meta && alt => {
-                    // 全部替换（仅输入面板）
                     e.stop_propagation();
                     if *active_panel.read() == "input" {
                         input_replace_all(());
@@ -281,10 +308,40 @@ pub fn JsonFormatterTool() -> Element {
     // ========== 输入变更：自动格式化 ==========
     let on_input_change = {
         move |e: Event<FormData>| {
-            active_panel.set("input".to_string()); // 认为此时活动在左侧
+            active_panel.set("input".to_string());
             input.set(e.value().to_string());
             repaint();
+            // 若输入面板正在查找，重新计算匹配位置（保持选中定位正确）
+            if !input_find_query.read().is_empty() {
+                input_recompute_matches();
+            }
         }
+    };
+
+    // ========== 复制到剪贴板 ==========
+    let copy_input = move |_| {
+        let text = input.read().clone();
+        if text.is_empty() {
+            return;
+        }
+        let escaped = serde_json::to_string(&text).unwrap_or_else(|_| "\"\"".to_string());
+        let js = format!(
+            "navigator.clipboard.writeText({t}).then(function(){{var b=document.getElementById('copy-in-btn');if(b){{var o=b.textContent;b.textContent='已复制 ✓';setTimeout(function(){{b.textContent=o;}},1200);}}}}).catch(function(){{var b=document.getElementById('copy-in-btn');if(b){{b.textContent='复制失败';setTimeout(function(){{b.textContent='复制';}},1200);}}}});",
+            t = escaped
+        );
+        dioxus::document::eval(&js);
+    };
+    let copy_output = move |_| {
+        let text = output.read().clone();
+        if text.is_empty() {
+            return;
+        }
+        let escaped = serde_json::to_string(&text).unwrap_or_else(|_| "\"\"".to_string());
+        let js = format!(
+            "navigator.clipboard.writeText({t}).then(function(){{var b=document.getElementById('copy-out-btn');if(b){{var o=b.textContent;b.textContent='已复制 ✓';setTimeout(function(){{b.textContent=o;}},1200);}}}}).catch(function(){{var b=document.getElementById('copy-out-btn');if(b){{b.textContent='复制失败';setTimeout(function(){{b.textContent='复制';}},1200);}}}});",
+            t = escaped
+        );
+        dioxus::document::eval(&js);
     };
 
     // ====== 渲染 ======
@@ -293,18 +350,18 @@ pub fn JsonFormatterTool() -> Element {
             class: "tool-container",
             tabindex: "0",
             onkeydown: on_keydown,
-            style: "display:flex; flex-direction:column; height:100%; background:#1e1e1e; color:#ccc;",
+            style: "display:flex; flex-direction:column; height:100%; background:var(--bg-app); color:var(--text);",
 
             div {
                 class: "input-output-container",
-                style: "display:flex; flex:1; padding:16px; gap:16px; overflow:hidden;",
+                style: "display:flex; flex:1; padding:14px; gap:14px; overflow:hidden;",
 
                 // 左侧：输入
                 div {
-                    class: "input-panel",
-                    style: "flex:1; display:flex; flex-direction:column; border:1px solid #3c3c3c; border-radius:6px; overflow:hidden; user-select:none; -webkit-user-select:none; -moz-user-select:none; -ms-user-select:none;",
+                    class: "input-panel tb-panel",
+                    style: "flex:1; display:flex; flex-direction:column;",
 
-                    // —— 查找条（SearchBar）
+                    // -- 查找条
                     SearchBar {
                         show: input_show_find,
                         show_replace: input_show_replace,
@@ -317,18 +374,27 @@ pub fn JsonFormatterTool() -> Element {
                         on_replace_one: Some(EventHandler::new(move |_| input_replace_one(()))),
                         on_replace_all: Some(EventHandler::new(move |_| input_replace_all(()))),
                         replace_disabled: false,
+                        match_current: *input_current_match_idx.read(),
+                        match_total: input_match_positions.read().len(),
                     }
 
-                    // —— 标题
-                    h3 {
-                        style: "margin:0; padding:12px 16px; background:#2d2d30; font-size:14px; font-weight:600; border-bottom:1px solid #3c3c3c;",
-                        "输入"
+                    // -- 标题栏 + 复制
+                    div {
+                        class: "tb-panel-header",
+                        span { style: "flex:1;", "输入" }
+                        button {
+                            id: "copy-in-btn",
+                            class: "tb-btn-ghost",
+                            style: "padding:3px 10px; font-size:11px;",
+                            onclick: copy_input,
+                            "复制"
+                        }
                     }
 
-                    // —— 输入编辑器（给定 id，并更新 active_panel）
+                    // -- 输入编辑器
                     textarea {
                         id: "json-input",
-                        style: "flex:1; background:#1e1e1e; color:#cccccc; border:none; padding:16px; resize:none; font-family:'Monaco','Consolas',monospace; font-size:13px; overflow:auto; line-height:1.5;",
+                        class: "tb-textarea tb-scroll",
                         value: "{input}",
                         oninput: on_input_change,
                         onclick: move |_| active_panel.set("input".to_string()),
@@ -341,10 +407,10 @@ pub fn JsonFormatterTool() -> Element {
 
                 // 右侧：输出
                 div {
-                    class: "output-panel",
-                    style: "flex:1; display:flex; flex-direction:column; border:1px solid #3c3c3c; border-radius:6px; overflow:hidden; user-select:none; -webkit-user-select:none; -moz-user-select:none; -ms-user-select:none;",
+                    class: "output-panel tb-panel",
+                    style: "flex:1; display:flex; flex-direction:column;",
 
-                    // —— 查找条（SearchBar，禁用替换）
+                    // -- 查找条（禁用替换）
                     SearchBar {
                         show: output_show_find,
                         show_replace: output_show_replace,
@@ -357,18 +423,28 @@ pub fn JsonFormatterTool() -> Element {
                         on_replace_one: None,
                         on_replace_all: None,
                         replace_disabled: true,
+                        match_current: *output_current_match_idx.read(),
+                        match_total: output_match_positions.read().len(),
                     }
 
-                    h3 {
-                        style: "margin:0; padding:12px 16px; background:#2d2d30; font-size:14px; font-weight:600; border-bottom:1px solid #3c3c3c;",
-                        "输出"
+                    div {
+                        class: "tb-panel-header",
+                        span { style: "flex:1;", "输出" }
+                        button {
+                            id: "copy-out-btn",
+                            class: "tb-btn-ghost",
+                            style: "padding:3px 10px; font-size:11px;",
+                            onclick: copy_output,
+                            "复制"
+                        }
                     }
 
-                    // —— 高亮输出视图（可聚焦，更新 active_panel）
+                    // -- 高亮输出视图（可选中复制）
                     div {
                         id: "json-output",
+                        class: "tb-scroll",
                         tabindex: "0",
-                        style: "flex:1; background:#1e1e1e; color:#cccccc; margin:0; padding:16px; overflow:auto; white-space:pre-wrap; font-family:'Monaco','Consolas',monospace; font-size:13px; line-height:1.5;",
+                        style: "flex:1; background:var(--bg-input); color:var(--text); margin:0; padding:14px; overflow:auto; white-space:pre-wrap; word-break:break-word; font-family:'Menlo','Monaco','Consolas',monospace; font-size:13px; line-height:1.6;",
                         dangerous_inner_html: "{highlighted_output.read().clone()}",
                         onclick: move |_| active_panel.set("output".to_string()),
                         onfocus: move |_| active_panel.set("output".to_string()),
@@ -382,7 +458,7 @@ pub fn JsonFormatterTool() -> Element {
             if !error_message().is_empty() {
                 div {
                     class: "error-message",
-                    style: "padding: 12px 16px; color: #f48771; background: rgba(244, 135, 113, 0.1); border: 1px solid #f48771; border-radius: 4px; margin: 0 16px 16px; font-size: 13px;",
+                    style: "padding:10px 12px; color:var(--danger); background:rgba(244,135,113,.1); border:1px solid var(--danger); border-radius:var(--radius-sm); margin:0 14px 14px; font-size:13px;",
                     "{error_message}"
                 }
             }
