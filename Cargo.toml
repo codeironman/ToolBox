@@ -10,17 +10,12 @@ web = ["dioxus/web"]
 
 [dependencies]
 dioxus = { version = "0.6", features = ["desktop"] }
-dioxus-desktop = { version = "0.5" }
-serde_json = "1"
+serde_json = { version = "1", features = ["preserve_order"] }
 base64 = "0.22"
 chrono = { version = "0.4", features = ["clock"] }
 serde = { version = "1.0.228", features = ["derive"] }
 html-escape = "0.2.13"
 chrono-tz = "0.10.4"
-
-[workspace]
-members = ["src/core", "src/tools", "src/ui"]
-resolver = "2"
 
 
 [profile.release]

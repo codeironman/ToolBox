@@ -1,2 +1,2 @@
-pub mod hignlight;
+pub mod highlight;
 pub mod search;

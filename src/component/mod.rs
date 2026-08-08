@@ -26,6 +26,7 @@ const GLOBAL_CSS: &str = r#"
   --scrollbar:#3a3a3a; --scrollbar-hover:#4a4a4a; --handle-1:#232323; --handle-2:#2b2b2b;
   --shadow:0 2px 10px rgba(0,0,0,.18); --shadow-card:0 4px 14px rgba(0,0,0,.22);
   --radius:8px; --radius-sm:6px;
+  --json-key:#9cdcfe; --json-string:#ce9178; --json-number:#b5cea8; --json-bool:#569cd6; --json-null:#569cd6; --json-brace:#cccccc; --json-index:#dcdcaa;
 }
 [data-theme="light"]{
   --bg-app:#f4f4f4; --bg-panel:#ffffff; --bg-header:#ececec; --bg-input:#ffffff;
@@ -38,6 +39,7 @@ const GLOBAL_CSS: &str = r#"
   --text-on-accent:#fff; --placeholder:#9a9a9a;
   --scrollbar:#c4c4c4; --scrollbar-hover:#a0a0a0; --handle-1:#e0e0e0; --handle-2:#d4d4d4;
   --shadow:0 2px 10px rgba(0,0,0,.08); --shadow-card:0 4px 14px rgba(0,0,0,.08);
+  --json-key:#0550ae; --json-string:#a31515; --json-number:#098658; --json-bool:#0000ff; --json-null:#0000ff; --json-brace:#242424; --json-index:#795e26;
 }
 *{box-sizing:border-box;}
 body{margin:0;background:var(--bg-app);}
@@ -71,6 +73,21 @@ body{margin:0;background:var(--bg-app);}
 .tb-scroll::-webkit-scrollbar-thumb{background:var(--scrollbar);border-radius:5px;border:2px solid var(--bg-app);}
 .tb-scroll::-webkit-scrollbar-thumb:hover{background:var(--scrollbar-hover);}
 .tb-scroll::-webkit-scrollbar-track{background:transparent;}
+.tb-seg-btn{background:transparent;color:var(--text);border:none;padding:5px 12px;cursor:pointer;font-size:12px;font-family:inherit;transition:background .15s,color .15s;user-select:none;}
+.tb-seg-btn:hover{background:var(--bg-hover);color:var(--text-bright);}
+.json-row{display:block;}
+.json-children{margin-left:18px;border-left:1px dashed var(--border-soft);padding-left:8px;}
+.json-toggle{background:none;border:none;color:var(--text-dim);cursor:pointer;padding:0 3px;font-size:11px;font-family:inherit;line-height:1;user-select:none;}
+.json-toggle:hover{color:var(--text-bright);}
+.json-key{color:var(--json-key);}
+.json-string{color:var(--json-string);}
+.json-number{color:var(--json-number);}
+.json-bool{color:var(--json-bool);}
+.json-null{color:var(--json-null);}
+.json-brace{color:var(--json-brace);}
+.json-index{color:var(--json-index);}
+.json-count{color:var(--text-dim);font-size:11px;margin-left:4px;user-select:none;}
+.json-collapsed{color:var(--text-dim);}
 "#;
 
 /// macOS 透明标题栏下，内容顶部需让出红黄绿按钮 / 拖拽区的高度；其他平台为 0。
